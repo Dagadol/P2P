@@ -7,12 +7,11 @@ import socket
 import pickle
 
 IP = '127.0.0.1'
-TCP_PORT = 5050
-UDP_PORT = 5051
+TCP_PORT = 5500
+UDP_PORT = 5501
 
 def udp_server():
     pass
-
 
 def get_files(directory, ip):
     files = []
@@ -26,22 +25,21 @@ def get_files(directory, ip):
 
 
 def handle_share(ip):
-    path = input("enter a path of a folder").strip()
+    path = input("enter a path of a folder ").strip()
     files = []
     if os.path.isdir(path) and os.path.exists(path):
         files = get_files(path, ip)
 
-    return protocol.create_msg('SHR', pickle.dumps(files).decode())
-
+    return protocol.create_msg('SHR', pickle.dumps(files))
 
 
 def handle_dir():
-    return protocol.create_msg('DIR')
+    return protocol.create_msg('DIR', "dir")  # no data is needed
 
 
 def handle_lnk():
-    name = input("enter the file name")
-    size = input("enter the size of the file")
+    name = input("enter the file name ")
+    size = input("enter the size of the file ")
     return protocol.create_msg('LNK', f"{name}~{size}")
 
 

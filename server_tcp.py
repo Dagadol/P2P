@@ -18,8 +18,11 @@ def data_update(file_path, new_data):
         active_writers += 1
 
     with write_lock:
+        #try:
         with open(file_path, "rb") as db_file:
             data = pickle.load(db_file)
+        #except EOFError:
+        #    print("empty file")
 
         data.append(new_data)
 
@@ -103,7 +106,7 @@ def handle_dir(a):
 
 def handle_shr(data):  # get IP, and file data
     #  files = data.split("~")  # ["name^space_taken", ...]
-    files = pickle.load(data)
+    files = pickle.loads(data)
 
     print("files:", files)
     data_update("database", files)
@@ -112,15 +115,17 @@ def handle_shr(data):  # get IP, and file data
 
 
 def handle_lnk(data):  # get IP, and file data
-    path, size = data.split('~')
+    path, size = data.decode().split('~')
     while active_writers > 0:
         time.sleep(0.01)
 
     with write_lock:
+
         with open("database", "rb") as db_file:
             data = pickle.load(db_file)
 
-            file = [x for x in data if x.path == path and x.size == size][0]  # get the file with the same name and size
+        file = [x.owner_ip for x in data if x.path == path and x.size == size][0]  # get the file with the same name
+        # and size
 
             if file != "N/A":
                 return file.owner_ip
@@ -142,10 +147,9 @@ def handle_client(client_socket, addr):
         cmd, data = protocol.get_msg(client_socket)
         print("cmd:", cmd)
         print("data:", data)
-        info = handle_cmd(cmd, addr, data)
+        info = handle_cmd(cmd, data)
         print("info", info)
         client_socket.send(protocol.create_msg(cmd, info))
-
 
 
 def main():
@@ -154,11 +158,18 @@ def main():
     server_socket.bind(('0.0.0.0', 5500))
     server_socket.listen()
 
+    if not os.path.exists('database'):  # if db not exist create empty db
+        with open("database", 'wb') as f:
+            pickle.dump([], f)
+
+    print("server is up and running")
     while True:
         client_socket, addr = server_socket.accept()
+        print("client is connected from:", addr)
         t = threading.Thread(target=handle_client, args=[client_socket, addr])
         t.start()
         threads.append(t)
+    print("should never get here")
 
 
 if __name__ == "__main__":

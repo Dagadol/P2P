@@ -18,7 +18,10 @@ def create_msg(cmd, data):
 
 def get_msg(other_socket):
     try:
-        length = int(other_socket.recv(LENGTH_HEADER).decode())
+        length = other_socket.recv(LENGTH_HEADER)
+        print("l1:", length)
+        length = int(length.decode())
+        print("l2:", length)
         cmd = other_socket.recv(CMD_HEADER).decode()
         data = other_socket.recv(length).decode()
         return cmd, data
