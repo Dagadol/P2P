@@ -18,7 +18,7 @@ def get_files(directory, ip):
     for root, dirs, filenames in os.walk(directory):
         for filename in filenames:
             filepath = os.path.join(root, filename)
-            file_object = FileInfo(os.path.getsize(filepath), ip, filepath)
+            file_object = FileInfo(str(os.path.getsize(filepath)), ip, filepath)
             files.append(file_object)
 
     return files
@@ -54,7 +54,7 @@ def tcp_client():  # connected to main server only
 
         match command:
             case "SHR":
-                msg = handle_share(sock.gethostbyname(socket.gethostname()))
+                msg = handle_share(socket.gethostbyname(socket.gethostname()))
 
             case "DIR":
                 msg = handle_dir()
@@ -69,7 +69,7 @@ def tcp_client():  # connected to main server only
         sock.send(msg)
 
         cmd, data = protocol.get_msg(sock)
-        print(data)
+        print(data.decode())
 
 
 

@@ -10,10 +10,13 @@ def check_cmd(cmd):
 
 
 def create_msg(cmd, data):
-    length = len(data)
-    length = str(length).zfill(LENGTH_HEADER)
-    msg = length + cmd + data
-    return msg.encode()
+    if type(data) is not bytes:
+        data = data.encode()
+    print(data)
+    length = str(len(data)).zfill(LENGTH_HEADER)
+    msg = length.encode() + cmd.encode() + data
+    print(msg)
+    return msg
 
 
 def get_msg(other_socket):
@@ -23,7 +26,9 @@ def get_msg(other_socket):
         length = int(length.decode())
         print("l2:", length)
         cmd = other_socket.recv(CMD_HEADER).decode()
-        data = other_socket.recv(length).decode()
+        print("3")
+        data = other_socket.recv(length)
+        print("4")
         return cmd, data
-    except:
-        return "ERR", "error recieving the information"
+    except ValueError as e:
+        return "ER1", f"error recieving the information: {e}"

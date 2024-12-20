@@ -24,7 +24,7 @@ def data_update(file_path, new_data):
         #except EOFError:
         #    print("empty file")
 
-        data.append(new_data)
+        data += new_data
 
         with open(file_path, "wb") as db_file:
             pickle.dump(data, db_file)
@@ -83,11 +83,11 @@ def handle_dir(a):
     try:
         with open("database", "rb") as read_file:
             data = pickle.load(read_file)  # data is a list of classes of file_class
-        print("data:", data[0])
+        print("data:", data)
         print("data type:", type(data))
 
         connect_files = ""
-        for file in data[0]:
+        for file in data:
             connect_files += file.path  # between file `~` between parameters `^`
             connect_files += "^" + file.size + "~"  # separated by `name^space_taken~`
     except EOFError:
@@ -127,8 +127,8 @@ def handle_lnk(data):  # get IP, and file data
         file = [x.owner_ip for x in data if x.path == path and x.size == size][0]  # get the file with the same name
         # and size
 
-            if file != "N/A":
-                return file.owner_ip
+        if file != "N/A":
+            return file
     return "not found"
 
 
