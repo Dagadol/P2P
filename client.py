@@ -3,8 +3,12 @@ import protocol
 import udp_protocol
 from file_class import FileInfo
 import os
-import  socket
+import socket
+import pickle
 
+IP = '127.0.0.1'
+TCP_PORT = 5050
+UDP_PORT = 5051
 
 def udp_server():
     pass
@@ -15,47 +19,61 @@ def get_files(directory, ip):
     for root, dirs, filenames in os.walk(directory):
         for filename in filenames:
             filepath = os.path.join(root, filename)
-            files.append(filepath)
-            file_object = FileInfo()
-
-
+            file_object = FileInfo(os.path.getsize(filepath), ip, filepath)
+            files.append(file_object)
 
     return files
 
 
 def handle_share(ip):
     path = input("enter a path of a folder").strip()
+    files = []
     if os.path.isdir(path) and os.path.exists(path):
         files = get_files(path, ip)
+
+    return protocol.create_msg('SHR', pickle.dumps(files).decode())
 
 
 
 def handle_dir():
-    pass
+    return protocol.create_msg('DIR')
 
 
 def handle_lnk():
-    pass
+    name = input("enter the file name")
+    size = input("enter the size of the file")
+    return protocol.create_msg('LNK', f"{name}~{size}")
 
 
-def tcp_client():
+
+def tcp_client():  # connected to main server only
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect((IP, TCP_PORT))
+    print("connected to server")
+
     while True:
         command = input("Enter command ('SHR' or 'DIR' or 'LNK'): ").strip().upper()
 
-        if not protocol.check_cmd(command):
-            print("Invalid command! Please enter 'SHR' or 'DIR' or 'LNK'.")
-            continue
-
         match command:
             case "SHR":
-                handle_share(sock.gethostbyname(socket.gethostname()))
+                msg = handle_share(sock.gethostbyname(socket.gethostname()))
 
             case "DIR":
-                handle_dir()
+                msg = handle_dir()
 
             case "LNK":
-                handle_lnk()
+                msg = handle_lnk()
+
+            case _:  # default getaway
+                print("Invalid command! Please enter 'SHR' or 'DIR' or 'LNK'.")
+                continue
+
+        sock.send(msg)
+
+        cmd, data = protocol.get_msg(sock)
+        print(data)
+
+
 
 
 def main():
