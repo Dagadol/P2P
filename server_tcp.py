@@ -13,7 +13,7 @@ active_writers = 0
 
 
 def data_update(file_path, new_data):
-    global active_writers
+    global active_writers  # writing in database
     with write_lock:
         active_writers += 1
 
