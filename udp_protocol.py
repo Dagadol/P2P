@@ -4,7 +4,7 @@ import socket
 LENGTH = 3
 CHECKSUM = 32
 CMD = 3
-COMMANDS = ["GET"]
+COMMANDS = ["FRQ"]
 
 
 def clac_checksum(data):
