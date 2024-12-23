@@ -63,7 +63,6 @@ def handle_lnk():
     return protocol.create_msg('LNK', f"{name}~{size}")
 
 
-
 def tcp_client():  # connected to main server only
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((IP, TCP_PORT))

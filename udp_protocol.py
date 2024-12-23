@@ -5,7 +5,7 @@ import time
 LENGTH = 3
 CHECKSUM = 16
 CMD = 3
-COMMANDS = ["FRQ"]
+COMMANDS = ["FRQ", "RDO"]
 
 
 def clac_checksum(data):
