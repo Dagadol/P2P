@@ -1,8 +1,9 @@
 import hashlib
 import socket
+import time
 
 LENGTH = 3
-CHECKSUM = 32
+CHECKSUM = 16
 CMD = 3
 COMMANDS = ["FRQ"]
 
@@ -23,10 +24,10 @@ def create_msg(cmd, data):
 
 def get_msg(other_socket):
     try:
-        length = other_socket.recv(LENGTH)
-        checksum = other_socket.recv(CHECKSUM)
-        cmd = other_socket.recv(CMD)
-        data = other_socket.recv(length)
+        length, addr= other_socket.recvfrom(LENGTH)
+        checksum, addr = other_socket.recvfrom(CHECKSUM)
+        cmd, addr = other_socket.recvfrom(CMD)
+        data, addr = other_socket.recvfrom(length)
 
         if clac_checksum(cmd + data) != checksum:
             return False, "RDO", "checksum error"

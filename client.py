@@ -11,9 +11,27 @@ TCP_PORT = 5500
 UDP_PORT = 5501
 
 
-def udp_server():
+def handle_frq():
+    pass
+def handle_rdo():
     pass
 
+def send_file(file, sock, addr):
+    """"chunkim send and if didnt recieve good"""
+    data = []
+    with open(file, "rb") as f:
+        chunk = f.read(1024)
+        while len(chunk) > 0:
+            data.append(chunk)
+            chunk = f.read(1024)
+        data.append(chunk)
+
+    for i, chunk in enumerate(data):
+        sock.sendto(b"FRQ" + str(i).encode() + chunk, addr)  # decode the chuck it'd be possible to add together
+
+
+def udp_server():
+    pass
 
 def get_files(directory, ip):
     files = []
