@@ -11,12 +11,32 @@ TCP_PORT = 5500
 UDP_PORT = 5501
 
 
+def clear_socket_data(sock, buffer_size=1024):
+    sock.setblocking(False)  # Set the socket to non-blocking mode
+    try:
+        while True:
+            data, address = sock.recvfrom(buffer_size)
+            print(f"Cleared data from {address}: {data.decode('utf-8')}")
+    except BlockingIOError:
+        # No more data to read
+        pass
+    finally:
+        sock.setblocking(True)  # Restore the socket to blocking mode
+
+
 def handle_frq(sock, addr, file):
     send_file(file, sock, addr)
 
 
 def handle_rdo():
     pass
+
+
+"""def req_rdo(error_no, my_skt):
+    while error_no:
+        for n in error_no:
+            my_skt.sendto()"""
+
 
 def get_files(my_skt, name, ip):  # doesn`t work on larger than 10 bits files
     my_skt.sendto(udp_protocol.create_msg("FRQ", name), (ip, UDP_PORT))
@@ -41,7 +61,7 @@ def get_files(my_skt, name, ip):  # doesn`t work on larger than 10 bits files
 
 
 def send_file(file, sock, addr):
-    """"chunkim send and if didnt recieve good"""
+    """"chunkim send and if didn't recieve good"""
     data = []
     with open(file, "rb") as f:
         chunk = f.read(1024)
@@ -51,7 +71,9 @@ def send_file(file, sock, addr):
         data.append(chunk)
 
     for i, chunk in enumerate(data):
-        sock.sendto(b"FRQ" + str(i).encode() + chunk, addr)  # decode the chuck it'd be possible to add together
+        # decode the chuck it'd be possible to add together
+        sock.sendto(udp_protocol.create_msg("FRQ", (str(i) + "~").encode() + chunk), addr)
+    sock.sendto(udp_protocol.create_msg("END"), addr)
 
 
 def udp_server():
@@ -82,7 +104,7 @@ def handle_share(ip):
     path = input("enter a path of a folder ").strip()
     files = []
     if os.path.isdir(path) and os.path.exists(path):
-        files = get_files(path, ip)
+        files = get_files_list(path, ip)
 
     return protocol.create_msg('SHR', pickle.dumps(files))
 
@@ -113,7 +135,7 @@ def tcp_client():  # connected to main server only
                 msg = handle_dir()
 
             case "LNK":
-                msg = handle_lnk()
+                msg, req_name = handle_lnk()
 
             case _:  # default getaway
                 print("Invalid command! Please enter 'SHR' or 'DIR' or 'LNK'.")

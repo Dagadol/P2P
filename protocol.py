@@ -22,13 +22,9 @@ def create_msg(cmd, data):
 def get_msg(other_socket):
     try:
         length = other_socket.recv(LENGTH_HEADER)
-        print("l1:", length)
         length = int(length.decode())
-        print("l2:", length)
         cmd = other_socket.recv(CMD_HEADER).decode()
-        print("3")
         data = other_socket.recv(length)
-        print("4")
         return cmd, data
     except ValueError as e:
         return "ER1", f"error recieving the information: {e}"

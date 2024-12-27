@@ -5,7 +5,7 @@ import time
 LENGTH = 3
 CHECKSUM = 16
 CMD = 3
-COMMANDS = ["FRQ", "RDO"]
+COMMANDS = ["FRQ", "RDO", "END"]
 
 
 def clac_checksum(data):
@@ -15,7 +15,7 @@ def clac_checksum(data):
     return checksum
 
 
-def create_msg(cmd, data):
+def create_msg(cmd, data=b''):
     length = len(data)
     length = str(length).zfill(LENGTH)
     msg = length + clac_checksum(cmd + data) + cmd + data
@@ -30,10 +30,11 @@ def get_msg(other_socket):
         print('2')
         checksum, addr = other_socket.recvfrom(CHECKSUM)
         cmd, addr = other_socket.recvfrom(CMD)
-        data, addr = other_socket.recvfrom(length)
+        data, addr = other_socket.recvfrom(int(length))
 
         if clac_checksum(cmd + data) != checksum:
-            return False, "RDO", "checksum error"
-        return True, cmd, data
-    except:
-        return False, "ERR", "error recieving the information"
+            return False, "RDO", "checksum error", addr
+        return True, cmd, data, addr
+    except Exception as e:
+        print("reall shii error", e)
+        return False, "ERR", "error recieving the information", addr
