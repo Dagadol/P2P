@@ -24,7 +24,10 @@ def create_msg(cmd, data):
 
 def get_msg(other_socket):
     try:
-        length, addr= other_socket.recvfrom(LENGTH)
+        print('1')
+        print(other_socket.recvfrom(LENGTH))
+        length, addr = other_socket.recvfrom(LENGTH)
+        print('2')
         checksum, addr = other_socket.recvfrom(CHECKSUM)
         cmd, addr = other_socket.recvfrom(CMD)
         data, addr = other_socket.recvfrom(length)
