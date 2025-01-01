@@ -5,12 +5,87 @@ import pickle
 import os
 import file_class
 import time
+import udp_protocol
 
 PATH = f'shared_files'
 
 write_lock = threading.Lock()
 active_writers = 0
+IP = "10.0.0.15"
+UDP_PORT = 5501
 
+def clear_socket_data(sock, buffer_size=1024):
+    sock.setblocking(False)  # Set the socket to non-blocking mode
+    try:
+        while True:
+            data, address = sock.recvfrom(buffer_size)
+            print(f"Cleared data from {address}: {data.decode('utf-8')}")
+    except BlockingIOError:
+        # No more data to read
+        pass
+    finally:
+        sock.setblocking(True)  # Restore the socket to blocking mode
+
+
+def handle_frq(sock, addr, file):
+    send_file(file, sock, addr)
+
+
+def get_files(my_skt, name, ip):  # doesn`t work on larger than 10 bits files
+    print(f"Requesting file: {name} from {ip}:{UDP_PORT}")
+    my_skt.sendto(udp_protocol.create_msg("FRQ", name), (ip, UDP_PORT))
+    chunks = []
+    # error_no = []  # old way
+    try:
+        while True:
+            valid, cmd, chunk, addr = udp_protocol.get_msg(my_skt)
+            print(f"Received: valid={valid}, cmd={cmd}, chunk={chunk[:50]}... from {addr}")
+            if cmd == "END":
+                break
+            if not valid:
+                raise Exception
+            chunks.append(chunk.split("~")[1])
+
+    except Exception as e:
+        print(f"Error while receiving file: {e}")
+        clear_socket_data(my_skt)
+        get_files(my_skt, name, ip)
+    print("maam", name)
+    with open(name.split('\\')[-1], 'wb') as f:
+        f.write(''.join(chunks).encode())
+    print(f"File {name} received and written successfully.")
+
+
+def send_file(file, sock, addr):
+    print(f"Sending file: {file} to {addr}")
+    data = []
+    with open(file, "rb") as f:
+        chunk = f.read(10)
+        while len(chunk) > 0:
+            data.append(chunk)
+            chunk = f.read(10)
+        data.append(chunk)
+
+    for i, chunk in enumerate(data):
+        print(f"Sending chunk {i} of size {len(chunk)} to {addr}")
+        sock.sendto(udp_protocol.create_msg("FRQ", (str(i) + "~") + chunk.decode()), addr)
+    sock.sendto(udp_protocol.create_msg("END"), addr)
+    print(f"File {file} sent successfully.")
+
+
+def udp_server():
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server_sock.bind(("0.0.0.0", UDP_PORT))
+    print(f"UDP server listening on port {UDP_PORT}")
+    threads = []
+    while True:
+        valid, cmd, data, addr = udp_protocol.get_msg(server_sock)
+        print(f"UDP Server received: valid={valid}, cmd={cmd}, data={data[:50]}... from {addr}")
+        if valid:
+            if cmd == "FRQ":
+                t = threading.Thread(target=send_file, args=[data, server_sock, addr])
+                t.start()
+                threads.append(t)
 
 def data_update(file_path, new_data):
     global active_writers  # writing in database
@@ -129,11 +204,14 @@ def handle_lnk(data):  # get IP, and file data
 
         file = [x.owner_ip for x in data if x.path == os.path.normpath(path) and x.size == size]  # get the file with the same name
         print(file)
-        file = file[0]
-        # and size
-
-        if file != "N/A":
+        if len(file) > 0:
+            file = file[0]
             return file
+        else:
+            files, sizes = get_local_files_and_sizes(PATH)
+            for filename, size in zip(files, sizes):
+                if os.path.normpath(filename) == os.path.normpath(path) and size == int(size):
+                    return IP
     return "not found"
 
 
@@ -178,4 +256,5 @@ def main():
 
 
 if __name__ == "__main__":
+    threading.Thread(target=udp_server).start()
     main()

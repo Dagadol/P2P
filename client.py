@@ -145,7 +145,8 @@ def tcp_client():  # connected to main server only
 
         if cmd == "LNK":
             udp_skt = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            get_files(udp_skt, req_name, data)
+            if data != "not found":
+                get_files(udp_skt, req_name, data)
 
 
 def main():
