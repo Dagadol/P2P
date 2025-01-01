@@ -28,60 +28,56 @@ def handle_frq(sock, addr, file):
     send_file(file, sock, addr)
 
 
-def handle_rdo():
-    pass
-
-
-"""def req_rdo(error_no, my_skt):
-    while error_no:
-        for n in error_no:
-            my_skt.sendto()"""
-
-
 def get_files(my_skt, name, ip):  # doesn`t work on larger than 10 bits files
+    print(f"Requesting file: {name} from {ip}:{UDP_PORT}")
     my_skt.sendto(udp_protocol.create_msg("FRQ", name), (ip, UDP_PORT))
     chunks = []
     # error_no = []  # old way
     try:
         while True:
             valid, cmd, chunk, addr = udp_protocol.get_msg(my_skt)
-            if cmd == b"END":
+            print(f"Received: valid={valid}, cmd={cmd}, chunk={chunk[:50]}... from {addr}")
+            if cmd == "END":
                 break
             if not valid:
                 raise Exception
-            chunks.append(chunk.split(b"~")[1])
+            chunks.append(chunk.split("~")[1])
 
     except Exception as e:
-        print(e, end="")
+        print(f"Error while receiving file: {e}")
         clear_socket_data(my_skt)
         get_files(my_skt, name, ip)
-
-    with open(name.split('/')[-1], 'wb') as f:
-        f.write(b''.join(chunks))
+    print("maam", name)
+    with open(name.split('\\')[-1], 'wb') as f:
+        f.write(''.join(chunks).encode())
+    print(f"File {name} received and written successfully.")
 
 
 def send_file(file, sock, addr):
-    """"chunkim send and if didn't recieve good"""
+    print(f"Sending file: {file} to {addr}")
     data = []
     with open(file, "rb") as f:
-        chunk = f.read(1024)
+        chunk = f.read(10)
         while len(chunk) > 0:
             data.append(chunk)
-            chunk = f.read(1024)
+            chunk = f.read(10)
         data.append(chunk)
 
     for i, chunk in enumerate(data):
-        # decode the chuck it'd be possible to add together
-        sock.sendto(udp_protocol.create_msg("FRQ", (str(i) + "~").encode() + chunk), addr)
+        print(f"Sending chunk {i} of size {len(chunk)} to {addr}")
+        sock.sendto(udp_protocol.create_msg("FRQ", (str(i) + "~") + chunk.decode()), addr)
     sock.sendto(udp_protocol.create_msg("END"), addr)
+    print(f"File {file} sent successfully.")
 
 
 def udp_server():
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_sock.bind(("0.0.0.0", UDP_PORT))
+    print(f"UDP server listening on port {UDP_PORT}")
     threads = []
     while True:
         valid, cmd, data, addr = udp_protocol.get_msg(server_sock)
+        print(f"UDP Server received: valid={valid}, cmd={cmd}, data={data[:50]}... from {addr}")
         if valid:
             if cmd == "FRQ":
                 t = threading.Thread(target=send_file, args=[data, server_sock, addr])
@@ -101,7 +97,7 @@ def get_files_list(directory, ip):
 
 
 def handle_share(ip):
-    path = input("enter a path of a folder ").strip()
+    path = input("Enter a path of a folder: ").strip()
     files = []
     if os.path.isdir(path) and os.path.exists(path):
         files = get_files_list(path, ip)
@@ -114,15 +110,15 @@ def handle_dir():
 
 
 def handle_lnk():
-    name = input("enter the file name ")
-    size = input("enter the size of the file ")
+    name = input("Enter the file name: ")
+    size = input("Enter the size of the file: ")
     return protocol.create_msg('LNK', f"{name}~{size}"), name
 
 
 def tcp_client():  # connected to main server only
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((IP, TCP_PORT))
-    print("connected to server")
+    print("Connected to server")
 
     while True:
         command = input("Enter command ('SHR' or 'DIR' or 'LNK'): ").strip().upper()
@@ -137,14 +133,15 @@ def tcp_client():  # connected to main server only
             case "LNK":
                 msg, req_name = handle_lnk()
 
-            case _:  # default getaway
+            case _:  # default gateway
                 print("Invalid command! Please enter 'SHR' or 'DIR' or 'LNK'.")
                 continue
 
+        print(f"Sending TCP message: {msg}")
         sock.send(msg)
 
         cmd, data = protocol.get_msg(sock)
-        print(data.decode())
+        print(f"Received response: cmd={cmd}, data={data}")
 
         if cmd == "LNK":
             udp_skt = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -152,6 +149,7 @@ def tcp_client():  # connected to main server only
 
 
 def main():
+    print("Starting client...")
     t1 = threading.Thread(target=tcp_client)
     t2 = threading.Thread(target=udp_server)
     t1.start()

@@ -116,6 +116,7 @@ def handle_shr(data):  # get IP, and file data
 
 def handle_lnk(data):  # get IP, and file data
     path, size = data.decode().split('~')
+    print(path)
     while active_writers > 0:
         time.sleep(0.01)
 
@@ -123,8 +124,12 @@ def handle_lnk(data):  # get IP, and file data
 
         with open("database", "rb") as db_file:
             data = pickle.load(db_file)
+            for s in data:
+                print(str(s))
 
-        file = [x.owner_ip for x in data if x.path == path and x.size == size][0]  # get the file with the same name
+        file = [x.owner_ip for x in data if x.path == os.path.normpath(path) and x.size == size]  # get the file with the same name
+        print(file)
+        file = file[0]
         # and size
 
         if file != "N/A":
