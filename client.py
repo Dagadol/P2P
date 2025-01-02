@@ -136,7 +136,7 @@ def tcp_client():
         cmd, data = protocol.get_msg(sock)
         print(f"Received response: cmd={cmd}, data={data}")
 
-        if cmd == "LNK":
+        if cmd == "LNK" and data != b"not found":
             udp_skt = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             get_files(udp_skt, req_name, data.decode())
         print("Awaiting new command.")
