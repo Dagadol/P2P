@@ -11,64 +11,37 @@ PATH = f'shared_files'
 write_lock = threading.Lock()
 active_writers = 0
 
-
 def data_update(file_path, new_data):
-    global active_writers  # writing in database
+    global active_writers
     with write_lock:
         active_writers += 1
+        print(f"[DEBUG] Incremented active_writers: {active_writers}")
 
-    with write_lock:
-        #try:
+    try:
         with open(file_path, "rb") as db_file:
             data = pickle.load(db_file)
-        #except EOFError:
-        #    print("empty file")
+            print(f"[DEBUG] Data loaded from {file_path}: {data}")
+    except (EOFError, FileNotFoundError) as e:
+        print(f"[ERROR] Failed to read {file_path}: {e}")
+        data = []
 
-        data += new_data
+    data += new_data
 
+    try:
         with open(file_path, "wb") as db_file:
             pickle.dump(data, db_file)
+            print(f"[DEBUG] Data updated in {file_path}: {data}")
+    except Exception as e:
+        print(f"[ERROR] Failed to write to {file_path}: {e}")
 
     with write_lock:
         active_writers -= 1
-
-
-# old way to append
-"""
-def append_to_pickle_file(file_path, new_data): 
-    try:
-        # Open the file in read-write mode
-        with open(file_path, 'rb+') as file:
-            try:
-                # Try to load existing data
-                data = pickle.load(file)[0]
-            except IndexError:
-                print("index error")
-                data = pickle.load(file)
-            except EOFError:
-                data = []
-
-            # Append the new data
-            print("data:", data)
-            data.append(new_data)
-
-            for f in data:
-                print("name:", f.name)
-
-
-            file.seek(0)
-            pickle.dump(data, file)
-
-    except FileNotFoundError:
-        # If the file doesn't exist, create a new one and dump the data
-        with open(file_path, 'wb') as file:
-            pickle.dump([new_data], file)  # Start with a list containing the new data
-"""
-
+        print(f"[DEBUG] Decremented active_writers: {active_writers}")
 
 def get_local_files_and_sizes(directory):
     files = []
     sizes = []
+    print(f"[DEBUG] Scanning directory: {directory}")
 
     for root, dirs, filenames in os.walk(directory):
         for filename in filenames:
@@ -76,86 +49,87 @@ def get_local_files_and_sizes(directory):
             files.append(filepath)
             sizes.append(os.path.getsize(filepath))
 
+    print(f"[DEBUG] Found files: {files}")
+    print(f"[DEBUG] File sizes: {sizes}")
     return files, sizes
-
 
 def handle_dir(a):
     try:
         with open("database", "rb") as read_file:
-            data = pickle.load(read_file)  # data is a list of classes of file_class
-        print("data:", data)
-        print("data type:", type(data))
+            data = pickle.load(read_file)
+            print(f"[DEBUG] Data loaded from database: {data}")
 
         connect_files = ""
         for file in data:
-            connect_files += file.path  # between file `~` between parameters `^`
-            connect_files += "^" + file.size + "~"  # separated by `name^space_taken~`
+            connect_files += file.path
+            connect_files += "^" + file.size + "~"
     except EOFError:
-        print("no data?")
+        print("[WARNING] Database is empty.")
         connect_files = ""
 
     directory = PATH
     files, sizes = get_local_files_and_sizes(directory)
 
-    for filename, size in zip(files, sizes):  # connect local files
+    for filename, size in zip(files, sizes):
         connect_files += filename + "^"
         connect_files += str(size) + "~"
 
+    print(f"[DEBUG] handle_dir output: {connect_files}")
     return connect_files
 
-
-def handle_shr(data):  # get IP, and file data
-    #  files = data.split("~")  # ["name^space_taken", ...]
+def handle_shr(data):
+    print(f"[DEBUG] Received SHR data: {data}")
     files = pickle.loads(data)
-
-    print("files:", files)
     data_update("database", files)
-
     return "SHR"
 
-
-def handle_lnk(data):  # get IP, and file data
+def handle_lnk(data):
     path, size = data.decode().split('~')
-    print(path)
+    print(f"[DEBUG] Received LNK data: path={path}, size={size}")
     while active_writers > 0:
+        print(f"[DEBUG] Waiting for active_writers to finish. Current count: {active_writers}")
         time.sleep(0.01)
 
     with write_lock:
+        try:
+            with open("database", "rb") as db_file:
+                data = pickle.load(db_file)
+                print(f"[DEBUG] Data loaded from database for LNK: {data}")
 
-        with open("database", "rb") as db_file:
-            data = pickle.load(db_file)
-            for s in data:
-                print(str(s))
+            file = [x.owner_ip for x in data if x.path == os.path.normpath(path) and x.size == size]
+            file = file[0] if file else "N/A"
 
-        file = [x.owner_ip for x in data if x.path == os.path.normpath(path) and x.size == size]  # get the file with the same name
-        print(file)
-        file = file[0]
-        # and size
-
-        if file != "N/A":
-            return file
+            if file != "N/A":
+                print(f"[DEBUG] File found: {file}")
+                return file
+        except Exception as e:
+            print(f"[ERROR] handle_lnk failed: {e}")
     return "not found"
 
-
 def handle_cmd(cmd, data):
+    print(f"[DEBUG] Handling command: {cmd}, data: {data}")
     if protocol.check_cmd(cmd):
         functions = {"DIR": handle_dir,
                      "SHR": handle_shr,
                      "LNK": handle_lnk}
         return functions[cmd](data)
     else:
+        print(f"[ERROR] Invalid command: {cmd}")
         return "err"
 
-
 def handle_client(client_socket, addr):
+    print(f"[DEBUG] New client connected: {addr}")
     while True:
-        cmd, data = protocol.get_msg(client_socket)
-        print("cmd:", cmd)
-        print("data:", data)
-        info = handle_cmd(cmd, data)
-        print("info", info)
-        client_socket.send(protocol.create_msg(cmd, info))
-
+        try:
+            cmd, data = protocol.get_msg(client_socket)
+            print(f"[DEBUG] Received from client: cmd={cmd}, data={data}")
+            info = handle_cmd(cmd, data)
+            response = protocol.create_msg(cmd, info)
+            client_socket.send(response)
+            print(f"[DEBUG] Sent to client: {response}")
+        except Exception as e:
+            print(f"[ERROR] Error handling client {addr}: {e}")
+            break
 
 def main():
     threads = []
@@ -163,19 +137,21 @@ def main():
     server_socket.bind(('0.0.0.0', 5500))
     server_socket.listen()
 
-    if not os.path.exists('database'):  # if db not exist create empty db
+    if not os.path.exists('database'):
         with open("database", 'wb') as f:
             pickle.dump([], f)
+            print("[DEBUG] Initialized empty database.")
 
-    print("server is up and running")
+    print("[INFO] Server is up and running")
     while True:
-        client_socket, addr = server_socket.accept()
-        print("client is connected from:", addr)
-        t = threading.Thread(target=handle_client, args=[client_socket, addr])
-        t.start()
-        threads.append(t)
-    print("should never get here")
-
+        try:
+            client_socket, addr = server_socket.accept()
+            print(f"[INFO] Client connected: {addr}")
+            t = threading.Thread(target=handle_client, args=[client_socket, addr])
+            t.start()
+            threads.append(t)
+        except Exception as e:
+            print(f"[ERROR] Error accepting client: {e}")
 
 if __name__ == "__main__":
     main()

@@ -10,23 +10,23 @@ COMMANDS = ["FRQ", "RDO", "END"]
 
 def calc_checksum(data):
     m = hashlib.md5()
-    m.update(data.encode())
+    m.update(data)
     checksum = m.hexdigest()
     return checksum
 
 
-def create_msg(cmd, data=''):
+def create_msg(cmd, data=b''):
     length = len(data)
-    length = str(length).zfill(LENGTH)
+    length = (str(length).zfill(LENGTH)).encode()
 
-    msg = length + cmd + calc_checksum(cmd + data) + data
-    return msg.encode()
+    msg = length + cmd + calc_checksum(cmd + data).encode() + data
+    return msg
 
 
 def get_msg(udp_socket):
     try:
         # Receive the message and the sender's address
-        msg, addr = udp_socket.recvfrom(1024)
+        msg, addr = udp_socket.recvfrom(2048)
         print(msg)
 
         # Parse the length header
@@ -39,7 +39,6 @@ def get_msg(udp_socket):
         # Parse the command header
         cmd = msg[LENGTH:LENGTH + CMD].decode()
 
-
         # Parse the checksum
         checksum_start = LENGTH + CMD
         checksum_end = checksum_start + CHECKSUM
@@ -47,14 +46,13 @@ def get_msg(udp_socket):
 
         # Parse the data if the command requires it
         data_start = checksum_end
-        data = msg[data_start:data_start + length].decode()  # if contains_data(cmd) else ""
+        data = msg[data_start:data_start + length]
 
         # Validate the checksum
-        print(cmd + data)
-        print(checksum)
-        if checksum != calc_checksum(cmd + data):
+        if checksum != calc_checksum(cmd.encode() + data):
+            print(f"Checksum mismatch: {checksum} != {calc_checksum(cmd.encode() + data)}")
             return False, "ERR", "Checksum mismatch", addr
 
         return True, cmd, data, addr
-    except Exception as e:
+    except ValueError as e:
         return False, "ERR", str(e), None
