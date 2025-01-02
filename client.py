@@ -11,88 +11,85 @@ TCP_PORT = 5500
 UDP_PORT = 5501
 
 
-def clear_socket_data(sock, buffer_size=1024):
+BUFFER_SIZE = 1024  # Optimal buffer size for UDP transfer
+
+
+def clear_socket_data(sock, buffer_size=BUFFER_SIZE):
     sock.setblocking(False)  # Set the socket to non-blocking mode
     try:
         while True:
             data, address = sock.recvfrom(buffer_size)
             print(f"Cleared data from {address}: {data.decode('utf-8')}")
     except BlockingIOError:
-        # No more data to read
-        pass
+        pass  # No more data to read
     finally:
         sock.setblocking(True)  # Restore the socket to blocking mode
 
 
-def handle_frq(sock, addr, file):
-    send_file(file, sock, addr)
-
-
-def get_files(my_skt, name, ip):  # doesn`t work on larger than 10 bits files
+def get_files(my_skt, name, ip):
     print(f"Requesting file: {name} from {ip}:{UDP_PORT}")
-    my_skt.sendto(udp_protocol.create_msg("FRQ", name), (ip, UDP_PORT))
+    my_skt.sendto(udp_protocol.create_msg(b"FRQ", name.encode()), (ip, UDP_PORT))
     chunks = []
-    # error_no = []  # old way
-    try:
-        while True:
-            valid, cmd, chunk, addr = udp_protocol.get_msg(my_skt)
-            print(f"Received: valid={valid}, cmd={cmd}, chunk={chunk[:50]}... from {addr}")
-            if cmd == "END":
-                break
-            if not valid:
-                raise Exception
-            chunks.append(chunk.split("~")[1])
 
-    except Exception as e:
-        print(f"Error while receiving file: {e}")
-        clear_socket_data(my_skt)
-        get_files(my_skt, name, ip)
-    print("maam", name)
-    with open(name.split('\\')[-1], 'wb') as f:
-        f.write(''.join(chunks).encode())
-    print(f"File {name} received and written successfully.")
+    while True:
+        valid, cmd, chunk, addr = udp_protocol.get_msg(my_skt)
+        print(f"Received: valid={valid}, cmd={cmd}, chunk length={len(chunk)} from {addr}")
+        if cmd == "END":
+            break
+
+        if not valid:
+            print(f"Error while receiving file chunk: {chunk}")
+            clear_socket_data(my_skt)
+            return get_files(my_skt, name, ip)
+
+        chunks.append(chunk.split(b"~", 1)[1])  # Append the data part of the chunk
+
+    output_file = os.path.basename(name)
+    with open(output_file, 'wb') as f:
+        f.write(b"".join(chunks))
+    print(f"File {output_file} received and written successfully.")
 
 
 def send_file(file, sock, addr):
     print(f"Sending file: {file} to {addr}")
-    data = []
-    with open(file, "rb") as f:
-        chunk = f.read(10)
-        while len(chunk) > 0:
-            data.append(chunk)
-            chunk = f.read(10)
-        data.append(chunk)
+    try:
+        with open(file, "rb") as f:
+            chunk_id = 0
+            while True:
+                chunk = f.read(BUFFER_SIZE - len(f"{chunk_id}~".encode()))
+                if not chunk:
+                    break
 
-    for i, chunk in enumerate(data):
-        print(f"Sending chunk {i} of size {len(chunk)} to {addr}")
-        sock.sendto(udp_protocol.create_msg("FRQ", (str(i) + "~") + chunk.decode()), addr)
-    sock.sendto(udp_protocol.create_msg("END"), addr)
-    print(f"File {file} sent successfully.")
+                message = udp_protocol.create_msg(b"FRQ", f"{chunk_id}~".encode() + chunk)
+                sock.sendto(message, addr)
+                chunk_id += 1
+
+        sock.sendto(udp_protocol.create_msg(b"END"), addr)
+        print(f"File {file} sent successfully.")
+    except Exception as e:
+        print(f"Error while sending file {file}: {e}")
 
 
 def udp_server():
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_sock.bind(("0.0.0.0", UDP_PORT))
     print(f"UDP server listening on port {UDP_PORT}")
-    threads = []
+
     while True:
         valid, cmd, data, addr = udp_protocol.get_msg(server_sock)
         print(f"UDP Server received: valid={valid}, cmd={cmd}, data={data[:50]}... from {addr}")
-        if valid:
-            if cmd == "FRQ":
-                t = threading.Thread(target=send_file, args=[data, server_sock, addr])
-                t.start()
-                threads.append(t)
+        if valid and cmd == "FRQ":
+            filepath = data.decode()
+            threading.Thread(target=send_file, args=(filepath, server_sock, addr)).start()
 
 
 def get_files_list(directory, ip):
     files = []
-    for root, dirs, filenames in os.walk(directory):
+    for root, _, filenames in os.walk(directory):
         for filename in filenames:
             filepath = os.path.join(root, filename)
             file_object = FileInfo(str(os.path.getsize(filepath)), ip, filepath)
             files.append(file_object)
-
     return files
 
 
@@ -106,7 +103,7 @@ def handle_share(ip):
 
 
 def handle_dir():
-    return protocol.create_msg('DIR', "dir")  # no data is needed
+    return protocol.create_msg('DIR', "dir")
 
 
 def handle_lnk():
@@ -115,7 +112,7 @@ def handle_lnk():
     return protocol.create_msg('LNK', f"{name}~{size}"), name
 
 
-def tcp_client():  # connected to main server only
+def tcp_client():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((IP, TCP_PORT))
     print("Connected to server")
@@ -123,19 +120,15 @@ def tcp_client():  # connected to main server only
     while True:
         command = input("Enter command ('SHR' or 'DIR' or 'LNK'): ").strip().upper()
 
-        match command:
-            case "SHR":
-                msg = handle_share(socket.gethostbyname(socket.gethostname()))
-
-            case "DIR":
-                msg = handle_dir()
-
-            case "LNK":
-                msg, req_name = handle_lnk()
-
-            case _:  # default gateway
-                print("Invalid command! Please enter 'SHR' or 'DIR' or 'LNK'.")
-                continue
+        if command == "SHR":
+            msg = handle_share(socket.gethostbyname(socket.gethostname()))
+        elif command == "DIR":
+            msg = handle_dir()
+        elif command == "LNK":
+            msg, req_name = handle_lnk()
+        else:
+            print("Invalid command! Please enter 'SHR', 'DIR', or 'LNK'.")
+            continue
 
         print(f"Sending TCP message: {msg}")
         sock.send(msg)
@@ -143,10 +136,10 @@ def tcp_client():  # connected to main server only
         cmd, data = protocol.get_msg(sock)
         print(f"Received response: cmd={cmd}, data={data}")
 
-        if cmd == "LNK":
+        if cmd == "LNK" and data != b"not found":
             udp_skt = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            if data != "not found":
-                get_files(udp_skt, req_name, data)
+            get_files(udp_skt, req_name, data.decode())
+        print("Awaiting new command.")
 
 
 def main():
